@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>wonder｜自我提問與故事創作</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/wordcloud2.js/1.1.1/wordcloud2.min.js"></script>
+  <style>
+    body {
+      font-family: "Noto Sans TC", sans-serif;
+      background: #fefefc;
+      color: #222;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+      text-align: center;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 1rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      padding: 2rem;
+      max-width: 600px;
+      font-size: 1.5rem;
+      line-height: 1.8;
+      margin-bottom: 1.5rem;
+    }
+
+    textarea {
+      width: 100%;
+      max-width: 600px;
+      height: 140px;
+      padding: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 1rem;
+      font-size: 1rem;
+      resize: none;
+      font-family: "Noto Sans TC", sans-serif;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+      margin-bottom: 1rem;
+    }
+
+    .button-group {
+      margin-top: 1rem;
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    button {
+      padding: 0.6rem 1.2rem;
+      border: none;
+      border-radius: 1.5rem;
+      background: #222;
+      color: #fff;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    button:hover {
+      background: #444;
+    }
+
+    .footer {
+      margin-top: 2rem;
+      font-size: 0.85rem;
+      color: #aaa;
+    }
+
+    .history, #wordCloud {
+      max-width: 600px;
+      text-align: left;
+      background: #f4f4f4;
+      padding: 1rem;
+      border-radius: 1rem;
+      margin-top: 2rem;
+      white-space: pre-wrap;
+    }
+
+    .history h3 {
+      font-size: 1.1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .entry {
+      margin-bottom: 1rem;
+    }
+
+    .entry strong {
+      color: #444;
+    }
+
+    .mode-switch {
+      margin-bottom: 1rem;
+    }
+
+    #wordCloudCanvas {
+      width: 100%;
+      height: 300px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="mode-switch">
+    <button onclick="switchMode('wonder')">🧠 wonder 提問</button>
+    <button onclick="switchMode('story')">✍️ 故事開頭</button>
+  </div>
+
+  <div class="card" id="prompt">載入中...</div>
+
+  <textarea id="answer" placeholder="在這裡寫下你的想法或故事..."></textarea>
+
+  <div class="button-group">
+    <button onclick="saveAndNext()">儲存並下一題</button>
+    <button onclick="clearAnswer()">清除回答</button>
+    <button onclick="toggleHistory()">查看歷史</button>
+    <button onclick="generateWordCloud()">字詞雲</button>
+  </div>
+
+  <div class="history" id="historyBox" style="display:none;"></div>
+
+  <div class="history" id="wordCloud" style="display:none;">
+    <h3>🪄 常出現的字詞</h3>
+    <canvas id="wordCloudCanvas"></canvas>
+  </div>
+
+  <div class="footer">wonder｜當下探索・草稿自動保存中</div>
+
+  <script>
+    const wonderQuestions = [
+      "你剛剛眼睛是不是不小心對上什麼了？",
+      "你現在身上有哪一樣東西是別人送的？",
+      "剛剛你是不是突然想起一件事，但又忘了？",
+      "你手機裡最舊的一張照片還在嗎？",
+      "如果剛剛有一隻動物經過你身邊，你希望是哪一種？",
+      "你現在最討厭聽到哪句話？",
+      "你是不是有東西藏在口袋裡，但你自己也忘了？"
+    ];
+
+    const storyOpenings = [
+      "他最後一次見到她，是在一場突然下起的雨中——",
+      "當那道門打開的瞬間，他明白今天不會是普通的一天。",
+      "她收到那封信的時候，窗外正飄著粉色的雪。",
+      "貓咪突然說話了，聲音低低的像某個熟人。",
+      "那台電梯的數字停在了不存在的樓層。",
+      "凌晨三點，一通沒顯示號碼的電話響起了。",
+      "他在背包裡發現了一本不屬於自己的日記。"
+    ];
+
+    let currentPrompt = "";
+    let currentMode = "wonder";
+    const answerBox = document.getElementById("answer");
+
+    function switchMode(mode) {
+      saveDraft();
+      currentMode = mode;
+      getPrompt();
+      loadDraft();
+      document.getElementById("historyBox").style.display = "none";
+      document.getElementById("wordCloud").style.display = "none";
+    }
+
+    function getPrompt() {
+      const source = currentMode === "wonder" ? wonderQuestions : storyOpenings;
+      const p = source[Math.floor(Math.random() * source.length)];
+      currentPrompt = p;
+      document.getElementById("prompt").textContent = p;
+    }
+
+    function clearAnswer() {
+      answerBox.value = "";
+      saveDraft();
+    }
+
+    function saveAndNext() {
+      const answer = answerBox.value.trim();
+      if (answer !== "") {
+        const key = currentMode + "-history";
+        const saved = JSON.parse(localStorage.getItem(key) || "[]");
+        saved.unshift({ prompt: currentPrompt, answer: answer, time: new Date().toLocaleString() });
+        localStorage.setItem(key, JSON.stringify(saved));
+      }
+      clearAnswer();
+      clearDraft();
+      getPrompt();
+    }
+
+    function toggleHistory() {
+      const box = document.getElementById("historyBox");
+      const key = currentMode + "-history";
+      const title = currentMode === "wonder" ? "🧠 Wonder 歷史回答" : "✍️ 故事創作紀錄";
+      const saved = JSON.parse(localStorage.getItem(key) || "[]");
+      if (box.style.display === "block") {
+        box.style.display = "none";
+        return;
+      }
+      if (saved.length === 0) {
+        box.innerHTML = `<h3>${title}</h3><div class='entry'>（尚未回答任何內容）</div>`;
+      } else {
+        box.innerHTML = `<h3>${title}</h3>` + saved.map(entry =>
+          `<div class="entry"><strong>${currentMode === "wonder" ? "Q" : "開頭"}：</strong>${entry.prompt}<br/><strong>你寫：</strong>${entry.answer}<br/><span style="font-size:0.8rem;color:#888">🕒 ${entry.time}</span></div>`
+        ).join("");
+      }
+      box.style.display = "block";
+    }
+
+    function saveDraft() {
+      const draftKey = currentMode + "-draft";
+      localStorage.setItem(draftKey, answerBox.value);
+    }
+
+    function loadDraft() {
+      const draftKey = currentMode + "-draft";
+      answerBox.value = localStorage.getItem(draftKey) || "";
+    }
+
+    function clearDraft() {
+      const draftKey = currentMode + "-draft";
+      localStorage.removeItem(draftKey);
+    }
+
+    // 自動儲存草稿
+    setInterval(saveDraft, 2000);
+
+    // 字詞雲功能
+    function generateWordCloud() {
+      const key = currentMode + "-history";
+      const saved = JSON.parse(localStorage.getItem(key) || "[]");
+      const text = saved.map(entry => entry.answer).join(" ");
+      const words = text
+        .replace(/[^\u4e00-\u9fa5a-zA-Z]/g, ' ')
+        .split(/\s+/)
+        .filter(word => word.length > 1 && !commonWords.includes(word));
+      const freq = {};
+      words.forEach(w => freq[w] = (freq[w] || 0) + 1);
+      const list = Object.entries(freq).sort((a, b) => b[1] - a[1]);
+      WordCloud(document.getElementById("wordCloudCanvas"), {
+        list: list.slice(0, 50),
+        gridSize: 8,
+        weightFactor: 12,
+        fontFamily: 'Noto Sans TC',
+        color: 'random-dark',
+        backgroundColor: '#f4f4f4'
+      });
+      document.getElementById("wordCloud").style.display = "block";
+      document.getElementById("historyBox").style.display = "none";
+    }
+
+    // 常見字詞（可擴充）
+    const commonWords = ["的是", "這個", "那個", "然後", "現在", "可以", "因為", "就是", "沒有", "有點", "一下", "什麼", "自己", "真的", "不會", "不要", "不要", "今天"];
+
+    // 初始載入
+    window.onload = () => {
+      switchMode("wonder");
+    };
+  </script>
+</body>
+</html>
